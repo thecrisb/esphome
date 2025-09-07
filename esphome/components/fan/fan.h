@@ -76,6 +76,10 @@ class FanCall {
     this->preset_mode_ = preset_mode;
     return *this;
   }
+  FanCall &retain_preset(bool retain = true) {
+    this->retain_preset_ = retain;
+    return *this;
+  }
   std::string get_preset_mode() const { return this->preset_mode_; }
 
   void perform();
@@ -89,6 +93,7 @@ class FanCall {
   optional<int> speed_;
   optional<FanDirection> direction_{};
   std::string preset_mode_{};
+  bool retain_preset_{false};
 };
 
 struct FanRestoreState {
