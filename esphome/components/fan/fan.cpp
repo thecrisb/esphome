@@ -69,9 +69,23 @@ void FanCall::validate_() {
 
     // https://developers.home-assistant.io/docs/core/entity/fan/#preset-modes
     // "Manually setting a speed must disable any set preset mode"
-    this->preset_mode_ = nullptr;
+    if (!this->retain_preset_){
+      this->preset_mode_ = nullptr;
+    }
   }
 
+  if (this->retain_preset_ && this->preset_mode_.empty()){
+    this->preset_mode_ = this->parent_.preset_mode;
+  }
+  
+  if (!this->preset_mode_.empty()) {
+    const auto &preset_modes = traits.supported_preset_modes();
+    if (preset_modes.find(this->preset_mode_) == preset_modes.end()) {
+      ESP_LOGW(TAG, "%s: Preset mode '%s' not supported", this->parent_.get_name().c_str(), this->preset_mode_.c_str());
+      this->preset_mode_.clear();
+    }
+  }
+  
   // when turning on...
   if (!this->parent_.state && this->binary_state_.has_value() &&
       *this->binary_state_
