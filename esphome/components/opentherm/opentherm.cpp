@@ -7,7 +7,7 @@
 
 #include "opentherm.h"
 #include "esphome/core/helpers.h"
-#ifdef USE_ESP32
+#if defined(ESP32) || defined(USE_ESP_IDF)
 #include "driver/timer.h"
 #include "esp_err.h"
 #endif
@@ -31,7 +31,7 @@ OpenTherm *OpenTherm::instance = nullptr;
 OpenTherm::OpenTherm(InternalGPIOPin *in_pin, InternalGPIOPin *out_pin, int32_t device_timeout)
     : in_pin_(in_pin),
       out_pin_(out_pin),
-#ifdef USE_ESP32
+#if defined(ESP32) || defined(USE_ESP_IDF)
       timer_group_(TIMER_GROUP_0),
       timer_idx_(TIMER_0),
 #endif
@@ -57,7 +57,7 @@ bool OpenTherm::initialize() {
   this->out_pin_->setup();
   this->out_pin_->digital_write(true);
 
-#ifdef USE_ESP32
+#if defined(ESP32) || defined(USE_ESP_IDF)
   return this->init_esp32_timer_();
 #else
   return true;
@@ -238,7 +238,7 @@ void IRAM_ATTR OpenTherm::write_bit_(uint8_t high, uint8_t clock) {
   }
 }
 
-#ifdef USE_ESP32
+#if defined(ESP32) || defined(USE_ESP_IDF)
 
 bool OpenTherm::init_esp32_timer_() {
   // Search for a free timer. Maybe unstable, we'll see.
@@ -365,7 +365,7 @@ void IRAM_ATTR OpenTherm::stop_timer_() {
   }
 }
 
-#endif  // USE_ESP32
+#endif  // END ESP32
 
 #ifdef ESP8266
 // 5 kHz timer_

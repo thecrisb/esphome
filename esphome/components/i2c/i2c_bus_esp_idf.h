@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef USE_ESP32
+#ifdef USE_ESP_IDF
 
 #include "esphome/core/component.h"
 #include "i2c_bus.h"
@@ -53,4 +53,4 @@ class IDFI2CBus : public InternalI2CBus, public Component {
 }  // namespace i2c
 }  // namespace esphome
 
-#endif  // USE_ESP32
+#endif  // USE_ESP_IDF

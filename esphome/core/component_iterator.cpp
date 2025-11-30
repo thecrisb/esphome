@@ -5,7 +5,7 @@
 #ifdef USE_API
 #include "esphome/components/api/api_server.h"
 #endif
-#ifdef USE_API_USER_DEFINED_ACTIONS
+#ifdef USE_API_SERVICES
 #include "esphome/components/api/user_services.h"
 #endif
 
@@ -81,7 +81,7 @@ void ComponentIterator::advance() {
       break;
 #endif
 
-#ifdef USE_API_USER_DEFINED_ACTIONS
+#ifdef USE_API_SERVICES
     case IteratorState::SERVICE:
       this->process_platform_item_(api::global_api_server->get_user_services(), &ComponentIterator::on_service);
       break;
@@ -185,7 +185,7 @@ void ComponentIterator::advance() {
 
 bool ComponentIterator::on_end() { return true; }
 bool ComponentIterator::on_begin() { return true; }
-#ifdef USE_API_USER_DEFINED_ACTIONS
+#ifdef USE_API_SERVICES
 bool ComponentIterator::on_service(api::UserServiceDescriptor *service) { return true; }
 #endif
 #ifdef USE_CAMERA

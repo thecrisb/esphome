@@ -130,7 +130,7 @@ inline std::string operator+(const StringRef &lhs, const char *rhs) {
 
 #ifdef USE_JSON
 // NOLINTNEXTLINE(readability-identifier-naming)
-inline void convertToJson(const StringRef &src, JsonVariant dst) { dst.set(src.c_str()); }
+void convertToJson(const StringRef &src, JsonVariant dst);
 #endif  // USE_JSON
 
 }  // namespace esphome

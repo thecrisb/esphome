@@ -1,8 +1,6 @@
-#include "alarm_control_panel.h"
-#include "esphome/core/defines.h"
-#include "esphome/core/controller_registry.h"
-
 #include <utility>
+
+#include "alarm_control_panel.h"
 
 #include "esphome/core/application.h"
 #include "esphome/core/helpers.h"
@@ -36,9 +34,6 @@ void AlarmControlPanel::publish_state(AlarmControlPanelState state) {
              LOG_STR_ARG(alarm_control_panel_state_to_string(prev_state)));
     this->current_state_ = state;
     this->state_callback_.call();
-#if defined(USE_ALARM_CONTROL_PANEL) && defined(USE_CONTROLLER_REGISTRY)
-    ControllerRegistry::notify_alarm_control_panel_update(this);
-#endif
     if (state == ACP_STATE_TRIGGERED) {
       this->triggered_callback_.call();
     } else if (state == ACP_STATE_ARMING) {

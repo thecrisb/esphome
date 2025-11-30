@@ -143,18 +143,7 @@ def validate_mclk_divisible_by_3(config):
     return config
 
 
-# Key for storing legacy driver setting in CORE.data
-I2S_USE_LEGACY_DRIVER_KEY = "i2s_use_legacy_driver"
-
-
-def _get_use_legacy_driver():
-    """Get the legacy driver setting from CORE.data."""
-    return CORE.data.get(I2S_USE_LEGACY_DRIVER_KEY)
-
-
-def _set_use_legacy_driver(value: bool) -> None:
-    """Set the legacy driver setting in CORE.data."""
-    CORE.data[I2S_USE_LEGACY_DRIVER_KEY] = value
+_use_legacy_driver = None
 
 
 def i2s_audio_component_schema(
@@ -220,15 +209,17 @@ async def register_i2s_audio_component(var, config):
 
 
 def validate_use_legacy(value):
+    global _use_legacy_driver  # noqa: PLW0603
     if CONF_USE_LEGACY in value:
-        existing_value = _get_use_legacy_driver()
-        if (existing_value is not None) and (existing_value != value[CONF_USE_LEGACY]):
+        if (_use_legacy_driver is not None) and (
+            _use_legacy_driver != value[CONF_USE_LEGACY]
+        ):
             raise cv.Invalid(
                 f"All i2s_audio components must set {CONF_USE_LEGACY} to the same value."
             )
         if (not value[CONF_USE_LEGACY]) and (CORE.using_arduino):
             raise cv.Invalid("Arduino supports only the legacy i2s driver")
-        _set_use_legacy_driver(value[CONF_USE_LEGACY])
+        _use_legacy_driver = value[CONF_USE_LEGACY]
     return value
 
 
@@ -258,8 +249,7 @@ def _final_validate(_):
 
 
 def use_legacy():
-    legacy_driver = _get_use_legacy_driver()
-    return not (CORE.using_esp_idf and not legacy_driver)
+    return not (CORE.using_esp_idf and not _use_legacy_driver)
 
 
 FINAL_VALIDATE_SCHEMA = _final_validate
@@ -272,7 +262,8 @@ async def to_code(config):
         cg.add_define("USE_I2S_LEGACY")
 
     # Helps avoid callbacks being skipped due to processor load
-    add_idf_sdkconfig_option("CONFIG_I2S_ISR_IRAM_SAFE", True)
+    if CORE.using_esp_idf:
+        add_idf_sdkconfig_option("CONFIG_I2S_ISR_IRAM_SAFE", True)
 
     cg.add(var.set_lrclk_pin(config[CONF_I2S_LRCLK_PIN]))
     if CONF_I2S_BCLK_PIN in config:

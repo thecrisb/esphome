@@ -14,8 +14,8 @@ void EspLdo::setup() {
   config.flags.adjustable = this->adjustable_;
   auto err = esp_ldo_acquire_channel(&config, &this->handle_);
   if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to acquire LDO channel %d with voltage %fV", this->channel_, this->voltage_);
-    this->mark_failed(LOG_STR("Failed to acquire LDO channel"));
+    auto msg = str_sprintf("Failed to acquire LDO channel %d with voltage %fV", this->channel_, this->voltage_);
+    this->mark_failed(msg.c_str());
   } else {
     ESP_LOGD(TAG, "Acquired LDO channel %d with voltage %fV", this->channel_, this->voltage_);
   }

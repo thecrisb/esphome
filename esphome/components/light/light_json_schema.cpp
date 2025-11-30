@@ -3,33 +3,35 @@
 
 #ifdef USE_JSON
 
-namespace esphome::light {
+namespace esphome {
+namespace light {
 
 // See https://www.home-assistant.io/integrations/light.mqtt/#json-schema for documentation on the schema
 
-// Get JSON string for color mode using linear search (avoids large switch jump table)
-static const char *get_color_mode_json_str(ColorMode mode) {
-  // Parallel arrays: mode values and their corresponding strings
-  // Uses less RAM than a switch jump table on sparse enum values
-  static constexpr ColorMode MODES[] = {
-      ColorMode::ON_OFF,
-      ColorMode::BRIGHTNESS,
-      ColorMode::WHITE,
-      ColorMode::COLOR_TEMPERATURE,
-      ColorMode::COLD_WARM_WHITE,
-      ColorMode::RGB,
-      ColorMode::RGB_WHITE,
-      ColorMode::RGB_COLOR_TEMPERATURE,
-      ColorMode::RGB_COLD_WARM_WHITE,
-  };
-  static constexpr const char *STRINGS[] = {
-      "onoff", "brightness", "white", "color_temp", "cwww", "rgb", "rgbw", "rgbct", "rgbww",
-  };
-  for (size_t i = 0; i < sizeof(MODES) / sizeof(MODES[0]); i++) {
-    if (MODES[i] == mode)
-      return STRINGS[i];
+// Lookup table for color mode strings
+static constexpr const char *get_color_mode_json_str(ColorMode mode) {
+  switch (mode) {
+    case ColorMode::ON_OFF:
+      return "onoff";
+    case ColorMode::BRIGHTNESS:
+      return "brightness";
+    case ColorMode::WHITE:
+      return "white";  // not supported by HA in MQTT
+    case ColorMode::COLOR_TEMPERATURE:
+      return "color_temp";
+    case ColorMode::COLD_WARM_WHITE:
+      return "cwww";  // not supported by HA
+    case ColorMode::RGB:
+      return "rgb";
+    case ColorMode::RGB_WHITE:
+      return "rgbw";
+    case ColorMode::RGB_COLOR_TEMPERATURE:
+      return "rgbct";  // not supported by HA
+    case ColorMode::RGB_COLD_WARM_WHITE:
+      return "rgbww";
+    default:
+      return nullptr;
   }
-  return nullptr;
 }
 
 void LightJSONSchema::dump_json(LightState &state, JsonObject root) {
@@ -41,6 +43,7 @@ void LightJSONSchema::dump_json(LightState &state, JsonObject root) {
   }
 
   auto values = state.remote_values;
+  auto traits = state.get_output()->get_traits();
 
   const auto color_mode = values.get_color_mode();
   const char *mode_str = get_color_mode_json_str(color_mode);
@@ -167,6 +170,7 @@ void LightJSONSchema::parse_json(LightState &state, LightCall &call, JsonObject 
   }
 }
 
-}  // namespace esphome::light
+}  // namespace light
+}  // namespace esphome
 
 #endif

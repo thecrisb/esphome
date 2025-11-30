@@ -1,30 +1,20 @@
 import collections
-from collections.abc import Callable
 import io
 import logging
+import os
 from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from esphome import const
 
 _LOGGER = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from esphome.config_validation import Schema
-    from esphome.cpp_generator import MockObjClass
-
 
 class RegistryEntry:
-    def __init__(
-        self,
-        name: str,
-        fun: Callable[..., Any],
-        type_id: "MockObjClass",
-        schema: "Schema",
-    ):
+    def __init__(self, name, fun, type_id, schema):
         self.name = name
         self.fun = fun
         self.type_id = type_id
@@ -49,8 +39,8 @@ class Registry(dict[str, RegistryEntry]):
         self.base_schema = base_schema or {}
         self.type_id_key = type_id_key
 
-    def register(self, name: str, type_id: "MockObjClass", schema: "Schema"):
-        def decorator(fun: Callable[..., Any]):
+    def register(self, name, type_id, schema):
+        def decorator(fun):
             self[name] = RegistryEntry(name, fun, type_id, schema)
             return fun
 
@@ -58,8 +48,8 @@ class Registry(dict[str, RegistryEntry]):
 
 
 class SimpleRegistry(dict):
-    def register(self, name: str, data: Any):
-        def decorator(fun: Callable[..., Any]):
+    def register(self, name, data):
+        def decorator(fun):
             self[name] = (fun, data)
             return fun
 
@@ -96,10 +86,7 @@ def safe_input(prompt=""):
     return input()
 
 
-def shlex_quote(s: str | Path) -> str:
-    # Convert Path objects to strings
-    if isinstance(s, Path):
-        s = str(s)
+def shlex_quote(s):
     if not s:
         return "''"
     if re.search(r"[^\w@%+=:,./-]", s) is None:
@@ -285,28 +272,22 @@ class OrderedDict(collections.OrderedDict):
         return dict(self).__repr__()
 
 
-def list_yaml_files(configs: list[str | Path]) -> list[Path]:
-    files: list[Path] = []
-    for config in configs:
-        config = Path(config)
-        if not config.exists():
-            raise FileNotFoundError(f"Config path '{config}' does not exist!")
-        if config.is_file():
-            files.append(config)
-        else:
-            files.extend(config.glob("*"))
-    files = filter_yaml_files(files)
-    return sorted(files)
+def list_yaml_files(folders: list[str]) -> list[str]:
+    files = filter_yaml_files(
+        [os.path.join(folder, p) for folder in folders for p in os.listdir(folder)]
+    )
+    files.sort()
+    return files
 
 
-def filter_yaml_files(files: list[Path]) -> list[Path]:
+def filter_yaml_files(files: list[str]) -> list[str]:
     return [
         f
         for f in files
         if (
-            f.suffix in (".yaml", ".yml")
-            and f.name not in ("secrets.yaml", "secrets.yml")
-            and not f.name.startswith(".")
+            os.path.splitext(f)[1] in (".yaml", ".yml")
+            and os.path.basename(f) not in ("secrets.yaml", "secrets.yml")
+            and not os.path.basename(f).startswith(".")
         )
     ]
 

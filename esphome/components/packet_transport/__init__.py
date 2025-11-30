@@ -121,11 +121,15 @@ def transport_schema(cls):
     return TRANSPORT_SCHEMA.extend({cv.GenerateID(): cv.declare_id(cls)})
 
 
+# Build a list of sensors for this platform
+CORE.data[DOMAIN] = {CONF_SENSORS: []}
+
+
 def get_sensors(transport_id):
     """Return the list of sensors for this platform."""
     return (
         sensor
-        for sensor in CORE.data.setdefault(DOMAIN, {}).setdefault(CONF_SENSORS, [])
+        for sensor in CORE.data[DOMAIN][CONF_SENSORS]
         if sensor[CONF_TRANSPORT_ID] == transport_id
     )
 
@@ -133,8 +137,7 @@ def get_sensors(transport_id):
 def validate_packet_transport_sensor(config):
     if CONF_NAME in config and CONF_INTERNAL not in config:
         raise cv.Invalid("Must provide internal: config when using name:")
-    conf_sensors = CORE.data.setdefault(DOMAIN, {}).setdefault(CONF_SENSORS, [])
-    conf_sensors.append(config)
+    CORE.data[DOMAIN][CONF_SENSORS].append(config)
     return config
 
 

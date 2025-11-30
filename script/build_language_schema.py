@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import argparse
+import glob
 import inspect
 import json
 import os
-from pathlib import Path
 import re
 
 import voluptuous as vol
@@ -70,14 +70,14 @@ def get_component_names():
     component_names = ["esphome", "sensor", "esp32", "esp8266"]
     skip_components = []
 
-    for d in CORE_COMPONENTS_PATH.iterdir():
+    for d in os.listdir(CORE_COMPONENTS_PATH):
         if (
-            not d.name.startswith("__")
-            and d.is_dir()
-            and d.name not in component_names
-            and d.name not in skip_components
+            not d.startswith("__")
+            and os.path.isdir(os.path.join(CORE_COMPONENTS_PATH, d))
+            and d not in component_names
+            and d not in skip_components
         ):
-            component_names.append(d.name)
+            component_names.append(d)
 
     return sorted(component_names)
 
@@ -121,7 +121,7 @@ from esphome.util import Registry  # noqa: E402
 
 
 def write_file(name, obj):
-    full_path = Path(args.output_path) / f"{name}.json"
+    full_path = os.path.join(args.output_path, name + ".json")
     if JSON_DUMP_PRETTY:
         json_str = json.dumps(obj, indent=2)
     else:
@@ -131,10 +131,9 @@ def write_file(name, obj):
 
 
 def delete_extra_files(keep_names):
-    output_path = Path(args.output_path)
-    for d in output_path.iterdir():
-        if d.suffix == ".json" and d.stem not in keep_names:
-            d.unlink()
+    for d in os.listdir(args.output_path):
+        if d.endswith(".json") and d[:-5] not in keep_names:
+            os.remove(os.path.join(args.output_path, d))
             print(f"Deleted {d}")
 
 
@@ -300,7 +299,7 @@ def fix_remote_receiver():
     remote_receiver_schema["CONFIG_SCHEMA"] = {
         "type": "schema",
         "schema": {
-            "extends": ["binary_sensor._BINARY_SENSOR_SCHEMA", "core.COMPONENT_SCHEMA"],
+            "extends": ["binary_sensor.BINARY_SENSOR_SCHEMA", "core.COMPONENT_SCHEMA"],
             "config_vars": output["remote_base"].pop("binary"),
         },
     }
@@ -368,11 +367,13 @@ def get_logger_tags():
         "scheduler",
         "api.service",
     ]
-    for file in CORE_COMPONENTS_PATH.rglob("*.cpp"):
-        data = file.read_text()
-        match = pattern.search(data)
-        if match:
-            tags.append(match.group(1))
+    for x in os.walk(CORE_COMPONENTS_PATH):
+        for y in glob.glob(os.path.join(x[0], "*.cpp")):
+            with open(y, encoding="utf-8") as file:
+                data = file.read()
+                match = pattern.search(data)
+                if match:
+                    tags.append(match.group(1))
     return tags
 
 

@@ -7,7 +7,7 @@
 #include "esphome/core/automation.h"
 #include "api_pb2.h"
 
-#ifdef USE_API_USER_DEFINED_ACTIONS
+#ifdef USE_API_SERVICES
 namespace esphome::api {
 
 class UserServiceDescriptor {
@@ -23,58 +23,11 @@ template<typename T> T get_execute_arg_value(const ExecuteServiceArgument &arg);
 
 template<typename T> enums::ServiceArgType to_service_arg_type();
 
-// Base class for YAML-defined services (most common case)
-// Stores only pointers to string literals in flash - no heap allocation
 template<typename... Ts> class UserServiceBase : public UserServiceDescriptor {
  public:
-  UserServiceBase(const char *name, const std::array<const char *, sizeof...(Ts)> &arg_names)
-      : name_(name), arg_names_(arg_names) {
-    this->key_ = fnv1_hash(name);
-  }
-
-  ListEntitiesServicesResponse encode_list_service_response() override {
-    ListEntitiesServicesResponse msg;
-    msg.set_name(StringRef(this->name_));
-    msg.key = this->key_;
-    std::array<enums::ServiceArgType, sizeof...(Ts)> arg_types = {to_service_arg_type<Ts>()...};
-    msg.args.init(sizeof...(Ts));
-    for (size_t i = 0; i < sizeof...(Ts); i++) {
-      auto &arg = msg.args.emplace_back();
-      arg.type = arg_types[i];
-      arg.set_name(StringRef(this->arg_names_[i]));
-    }
-    return msg;
-  }
-
-  bool execute_service(const ExecuteServiceRequest &req) override {
-    if (req.key != this->key_)
-      return false;
-    if (req.args.size() != sizeof...(Ts))
-      return false;
-    this->execute_(req.args, std::make_index_sequence<sizeof...(Ts)>{});
-    return true;
-  }
-
- protected:
-  virtual void execute(Ts... x) = 0;
-  template<typename ArgsContainer, size_t... S>
-  void execute_(const ArgsContainer &args, std::index_sequence<S...> type) {
-    this->execute((get_execute_arg_value<Ts>(args[S]))...);
-  }
-
-  // Pointers to string literals in flash - no heap allocation
-  const char *name_;
-  std::array<const char *, sizeof...(Ts)> arg_names_;
-  uint32_t key_{0};
-};
-
-// Separate class for custom_api_device services (rare case)
-// Stores copies of runtime-generated names
-template<typename... Ts> class UserServiceDynamic : public UserServiceDescriptor {
- public:
-  UserServiceDynamic(std::string name, const std::array<std::string, sizeof...(Ts)> &arg_names)
+  UserServiceBase(std::string name, const std::array<std::string, sizeof...(Ts)> &arg_names)
       : name_(std::move(name)), arg_names_(arg_names) {
-    this->key_ = fnv1_hash(this->name_.c_str());
+    this->key_ = fnv1_hash(this->name_);
   }
 
   ListEntitiesServicesResponse encode_list_service_response() override {
@@ -82,9 +35,9 @@ template<typename... Ts> class UserServiceDynamic : public UserServiceDescriptor
     msg.set_name(StringRef(this->name_));
     msg.key = this->key_;
     std::array<enums::ServiceArgType, sizeof...(Ts)> arg_types = {to_service_arg_type<Ts>()...};
-    msg.args.init(sizeof...(Ts));
-    for (size_t i = 0; i < sizeof...(Ts); i++) {
-      auto &arg = msg.args.emplace_back();
+    for (int i = 0; i < sizeof...(Ts); i++) {
+      msg.args.emplace_back();
+      auto &arg = msg.args.back();
       arg.type = arg_types[i];
       arg.set_name(StringRef(this->arg_names_[i]));
     }
@@ -94,29 +47,26 @@ template<typename... Ts> class UserServiceDynamic : public UserServiceDescriptor
   bool execute_service(const ExecuteServiceRequest &req) override {
     if (req.key != this->key_)
       return false;
-    if (req.args.size() != sizeof...(Ts))
+    if (req.args.size() != this->arg_names_.size())
       return false;
-    this->execute_(req.args, std::make_index_sequence<sizeof...(Ts)>{});
+    this->execute_(req.args, typename gens<sizeof...(Ts)>::type());
     return true;
   }
 
  protected:
   virtual void execute(Ts... x) = 0;
-  template<typename ArgsContainer, size_t... S>
-  void execute_(const ArgsContainer &args, std::index_sequence<S...> type) {
+  template<int... S> void execute_(std::vector<ExecuteServiceArgument> args, seq<S...> type) {
     this->execute((get_execute_arg_value<Ts>(args[S]))...);
   }
 
-  // Heap-allocated strings for runtime-generated names
   std::string name_;
-  std::array<std::string, sizeof...(Ts)> arg_names_;
   uint32_t key_{0};
+  std::array<std::string, sizeof...(Ts)> arg_names_;
 };
 
 template<typename... Ts> class UserServiceTrigger : public UserServiceBase<Ts...>, public Trigger<Ts...> {
  public:
-  // Constructor for static names (YAML-defined services - used by code generator)
-  UserServiceTrigger(const char *name, const std::array<const char *, sizeof...(Ts)> &arg_names)
+  UserServiceTrigger(const std::string &name, const std::array<std::string, sizeof...(Ts)> &arg_names)
       : UserServiceBase<Ts...>(name, arg_names) {}
 
  protected:
@@ -124,4 +74,4 @@ template<typename... Ts> class UserServiceTrigger : public UserServiceBase<Ts...
 };
 
 }  // namespace esphome::api
-#endif  // USE_API_USER_DEFINED_ACTIONS
+#endif  // USE_API_SERVICES

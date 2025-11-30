@@ -33,10 +33,7 @@ void Logger::pre_setup() {
   ESP_LOGI(TAG, "Log initialized");
 }
 
-void HOT Logger::write_msg_(const char *msg, size_t len) {
-  // Single write with newline already in buffer (added by caller)
-  this->hw_serial_->write(msg, len);
-}
+void HOT Logger::write_msg_(const char *msg) { this->hw_serial_->println(msg); }
 
 const LogString *Logger::get_uart_selection_() {
   switch (this->uart_) {

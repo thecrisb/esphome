@@ -37,7 +37,6 @@ from esphome.const import (
     CONF_DATA_RATE,
     CONF_DC_PIN,
     CONF_DIMENSIONS,
-    CONF_DISABLED,
     CONF_ENABLE_PIN,
     CONF_ID,
     CONF_INIT_SEQUENCE,
@@ -131,18 +130,28 @@ def denominator(config):
         ) from StopIteration
 
 
+def swap_xy_schema(model):
+    uses_swap = model.get_default(CONF_SWAP_XY, None) != cv.UNDEFINED
+
+    def validator(value):
+        if value:
+            raise cv.Invalid("Axis swapping not supported by this model")
+        return cv.boolean(value)
+
+    if uses_swap:
+        return {cv.Required(CONF_SWAP_XY): cv.boolean}
+    return {cv.Optional(CONF_SWAP_XY, default=False): validator}
+
+
 def model_schema(config):
     model = MODELS[config[CONF_MODEL]]
     bus_mode = config[CONF_BUS_MODE]
-    transform = cv.Any(
-        cv.Schema(
-            {
-                cv.Required(CONF_MIRROR_X): cv.boolean,
-                cv.Required(CONF_MIRROR_Y): cv.boolean,
-                **model.swap_xy_schema(),
-            }
-        ),
-        cv.one_of(CONF_DISABLED, lower=True),
+    transform = cv.Schema(
+        {
+            cv.Required(CONF_MIRROR_X): cv.boolean,
+            cv.Required(CONF_MIRROR_Y): cv.boolean,
+            **swap_xy_schema(model),
+        }
     )
     # CUSTOM model will need to provide a custom init sequence
     iseqconf = (
@@ -151,11 +160,7 @@ def model_schema(config):
         else cv.Optional(CONF_INIT_SEQUENCE)
     )
     # Dimensions are optional if the model has a default width and the x-y transform is not overridden
-    transform_config = config.get(CONF_TRANSFORM, {})
-    is_swapped = (
-        isinstance(transform_config, dict)
-        and transform_config.get(CONF_SWAP_XY, False) is True
-    )
+    is_swapped = config.get(CONF_TRANSFORM, {}).get(CONF_SWAP_XY) is True
     cv_dimensions = (
         cv.Optional if model.get_default(CONF_WIDTH) and not is_swapped else cv.Required
     )
@@ -187,7 +192,9 @@ def model_schema(config):
         .extend(
             {
                 cv.GenerateID(): cv.declare_id(MipiSpi),
-                cv_dimensions(CONF_DIMENSIONS): dimension_schema(1),
+                cv_dimensions(CONF_DIMENSIONS): dimension_schema(
+                    model.get_default(CONF_DRAW_ROUNDING, 1)
+                ),
                 model.option(CONF_ENABLE_PIN, cv.UNDEFINED): cv.ensure_list(
                     pins.gpio_output_pin_schema
                 ),
@@ -373,42 +380,25 @@ def get_instance(config):
         bus_type = BusTypes[bus_type]
     buffer_type = cg.uint8 if color_depth == 8 else cg.uint16
     frac = denominator(config)
-    rotation = (
+    rotation = DISPLAY_ROTATIONS[
         0 if model.rotation_as_transform(config) else config.get(CONF_ROTATION, 0)
-    )
+    ]
     templateargs = [
         buffer_type,
         bufferpixels,
         config[CONF_BYTE_ORDER] == "big_endian",
         display_pixel_mode,
         bus_type,
+        width,
+        height,
+        offset_width,
+        offset_height,
     ]
     # If a buffer is required, use MipiSpiBuffer, otherwise use MipiSpi
     if requires_buffer(config):
-        templateargs.extend(
-            [
-                width,
-                height,
-                offset_width,
-                offset_height,
-                DISPLAY_ROTATIONS[rotation],
-                frac,
-                config[CONF_DRAW_ROUNDING],
-            ]
-        )
+        templateargs.append(rotation)
+        templateargs.append(frac)
         return MipiSpiBuffer, templateargs
-    # Swap height and width if the display is rotated 90 or 270 degrees in software
-    if rotation in (90, 270):
-        width, height = height, width
-        offset_width, offset_height = offset_height, offset_width
-    templateargs.extend(
-        [
-            width,
-            height,
-            offset_width,
-            offset_height,
-        ]
-    )
     return MipiSpi, templateargs
 
 
@@ -425,6 +415,7 @@ async def to_code(config):
         else:
             config[CONF_ROTATION] = 0
     cg.add(var.set_model(config[CONF_MODEL]))
+    cg.add(var.set_draw_rounding(config[CONF_DRAW_ROUNDING]))
     if enable_pin := config.get(CONF_ENABLE_PIN):
         enable = [await cg.gpio_pin_expression(pin) for pin in enable_pin]
         cg.add(var.set_enable_pins(enable))

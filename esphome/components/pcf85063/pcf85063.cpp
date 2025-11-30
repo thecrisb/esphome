@@ -23,7 +23,7 @@ void PCF85063Component::dump_config() {
   if (this->is_failed()) {
     ESP_LOGE(TAG, ESP_LOG_MSG_COMM_FAIL);
   }
-  RealTimeClock::dump_config();
+  ESP_LOGCONFIG(TAG, "  Timezone: '%s'", this->timezone_.c_str());
 }
 
 float PCF85063Component::get_setup_priority() const { return setup_priority::DATA; }

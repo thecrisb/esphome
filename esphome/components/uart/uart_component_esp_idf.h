@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef USE_ESP32
+#ifdef USE_ESP_IDF
 
 #include <driver/uart.h>
 #include "esphome/core/component.h"
@@ -14,9 +14,6 @@ class IDFUARTComponent : public UARTComponent, public Component {
   void setup() override;
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::BUS; }
-
-  void set_rx_full_threshold(size_t rx_full_threshold) override;
-  void set_rx_timeout(size_t rx_timeout) override;
 
   void write_array(const uint8_t *data, size_t len) override;
 
@@ -58,4 +55,4 @@ class IDFUARTComponent : public UARTComponent, public Component {
 }  // namespace uart
 }  // namespace esphome
 
-#endif  // USE_ESP32
+#endif  // USE_ESP_IDF

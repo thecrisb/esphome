@@ -86,6 +86,11 @@ def select_schema(
     return _SELECT_SCHEMA.extend(schema)
 
 
+# Remove before 2025.11.0
+SELECT_SCHEMA = select_schema(Select)
+SELECT_SCHEMA.add_extra(cv.deprecated_schema_constant("select"))
+
+
 async def setup_select_core_(var, config, *, options: list[str]):
     await setup_entity(var, config, "select")
 

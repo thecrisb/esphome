@@ -3,7 +3,8 @@
 #include "gpio.h"
 #include "esphome/core/log.h"
 
-namespace esphome::esp8266 {
+namespace esphome {
+namespace esp8266 {
 
 static const char *const TAG = "esp8266";
 
@@ -109,11 +110,9 @@ void ESP8266GPIOPin::digital_write(bool value) {
 }
 void ESP8266GPIOPin::detach_interrupt() const { detachInterrupt(pin_); }
 
-}  // namespace esphome::esp8266
+}  // namespace esp8266
 
-namespace esphome {
-
-using esp8266::ISRPinArg;
+using namespace esp8266;
 
 bool IRAM_ATTR ISRInternalGPIOPin::digital_read() {
   auto *arg = reinterpret_cast<ISRPinArg *>(this->arg_);

@@ -1,4 +1,4 @@
-#ifdef USE_ESP32
+#ifdef USE_ESP_IDF
 #include <memory>
 #include <cstring>
 #include <cctype>
@@ -122,4 +122,4 @@ const char *stristr(const char *haystack, const char *needle) {
 
 }  // namespace web_server_idf
 }  // namespace esphome
-#endif  // USE_ESP32
+#endif  // USE_ESP_IDF

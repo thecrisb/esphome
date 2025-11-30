@@ -52,19 +52,17 @@ void SPS30Component::setup() {
     } else {
       result = this->write_command(SPS30_CMD_SET_AUTOMATIC_CLEANING_INTERVAL_SECONDS);
     }
-
-    this->set_timeout(20, [this, result]() {
-      if (result) {
-        uint16_t secs[2];
-        if (this->read_data(secs, 2)) {
-          this->fan_interval_ = secs[0] << 16 | secs[1];
-        }
+    if (result) {
+      delay(20);
+      uint16_t secs[2];
+      if (this->read_data(secs, 2)) {
+        this->fan_interval_ = secs[0] << 16 | secs[1];
       }
-      this->status_clear_warning();
-      this->skipped_data_read_cycles_ = 0;
-      this->start_continuous_measurement_();
-      this->setup_complete_ = true;
-    });
+    }
+
+    this->status_clear_warning();
+    this->skipped_data_read_cycles_ = 0;
+    this->start_continuous_measurement_();
   });
 }
 
@@ -113,8 +111,6 @@ void SPS30Component::dump_config() {
 }
 
 void SPS30Component::update() {
-  if (!this->setup_complete_)
-    return;
   /// Check if warning flag active (sensor reconnected?)
   if (this->status_has_warning()) {
     ESP_LOGD(TAG, "Reconnecting");

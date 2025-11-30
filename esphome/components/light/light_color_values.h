@@ -4,7 +4,8 @@
 #include "color_mode.h"
 #include <cmath>
 
-namespace esphome::light {
+namespace esphome {
+namespace light {
 
 inline static uint8_t to_uint8_scale(float x) { return static_cast<uint8_t>(roundf(x * 255.0f)); }
 
@@ -309,4 +310,5 @@ class LightColorValues {
   ColorMode color_mode_;
 };
 
-}  // namespace esphome::light
+}  // namespace light
+}  // namespace esphome

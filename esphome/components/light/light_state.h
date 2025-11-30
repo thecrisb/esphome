@@ -11,11 +11,11 @@
 #include "light_traits.h"
 #include "light_transformer.h"
 
-#include "esphome/core/helpers.h"
-#include <strings.h>
 #include <vector>
+#include <strings.h>
 
-namespace esphome::light {
+namespace esphome {
+namespace light {
 
 class LightOutput;
 
@@ -159,10 +159,10 @@ class LightState : public EntityBase, public Component {
   bool supports_effects();
 
   /// Get all effects for this light state.
-  const FixedVector<LightEffect *> &get_effects() const;
+  const std::vector<LightEffect *> &get_effects() const;
 
   /// Add effects for this light state.
-  void add_effects(const std::initializer_list<LightEffect *> &effects);
+  void add_effects(const std::vector<LightEffect *> &effects);
 
   /// Get the total number of effects available for this light.
   size_t get_effect_count() const { return this->effects_.size(); }
@@ -176,7 +176,7 @@ class LightState : public EntityBase, public Component {
       return 0;
     }
     for (size_t i = 0; i < this->effects_.size(); i++) {
-      if (strcasecmp(effect_name.c_str(), this->effects_[i]->get_name()) == 0) {
+      if (strcasecmp(effect_name.c_str(), this->effects_[i]->get_name().c_str()) == 0) {
         return i + 1;  // Effects are 1-indexed in active_effect_index_
       }
     }
@@ -255,15 +255,12 @@ class LightState : public EntityBase, public Component {
   /// Internal method to save the current remote_values to the preferences
   void save_remote_values_();
 
-  /// Disable loop if neither transformer nor effect is active
-  void disable_loop_if_idle_();
-
   /// Store the output to allow effects to have more access.
   LightOutput *output_;
   /// The currently active transformer for this light (transition/flash).
   std::unique_ptr<LightTransformer> transformer_{nullptr};
   /// List of effects for this light.
-  FixedVector<LightEffect *> effects_;
+  std::vector<LightEffect *> effects_;
   /// Object used to store the persisted values of the light.
   ESPPreferenceObject rtc_;
   /// Value for storing the index of the currently active effect. 0 if no effect is active
@@ -300,4 +297,5 @@ class LightState : public EntityBase, public Component {
   LightRestoreMode restore_mode_;
 };
 
-}  // namespace esphome::light
+}  // namespace light
+}  // namespace esphome

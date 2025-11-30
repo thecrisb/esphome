@@ -31,7 +31,8 @@
 
 #include <array>
 
-namespace esphome::ld2450 {
+namespace esphome {
+namespace ld2450 {
 
 using namespace ld24xx;
 
@@ -114,8 +115,8 @@ class LD2450Component : public Component, public uart::UARTDevice {
   void restart_and_read_all_info();
   void set_bluetooth(bool enable);
   void set_multi_target(bool enable);
-  void set_baud_rate(const char *state);
-  void set_zone_type(const char *state);
+  void set_baud_rate(const std::string &state);
+  void set_zone_type(const std::string &state);
   void publish_zone_type();
   void factory_reset();
 #ifdef USE_TEXT_SENSOR
@@ -192,4 +193,5 @@ class LD2450Component : public Component, public uart::UARTDevice {
 #endif
 };
 
-}  // namespace esphome::ld2450
+}  // namespace ld2450
+}  // namespace esphome

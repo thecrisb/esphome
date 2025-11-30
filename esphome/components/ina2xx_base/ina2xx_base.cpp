@@ -257,12 +257,7 @@ bool INA2XX::reset_energy_counters() {
 bool INA2XX::reset_config_() {
   ESP_LOGV(TAG, "Reset");
   ConfigurationRegister cfg{0};
-  if (!this->reset_on_boot_) {
-    ESP_LOGI(TAG, "Skipping on-boot device reset");
-    cfg.RST = false;
-  } else {
-    cfg.RST = true;
-  }
+  cfg.RST = true;
   return this->write_unsigned_16_(RegisterMap::REG_CONFIG, cfg.raw_u16);
 }
 

@@ -58,8 +58,6 @@ def _get_platformio_env(cache_dir: Path) -> dict[str, str]:
     env["PLATFORMIO_CORE_DIR"] = str(cache_dir)
     env["PLATFORMIO_CACHE_DIR"] = str(cache_dir / ".cache")
     env["PLATFORMIO_LIBDEPS_DIR"] = str(cache_dir / "libdeps")
-    # Prevent cache cleaning during integration tests
-    env["ESPHOME_SKIP_CLEAN_BUILD"] = "1"
     return env
 
 
@@ -69,11 +67,6 @@ def shared_platformio_cache() -> Generator[Path]:
     # Use a dedicated directory for integration tests to avoid conflicts
     test_cache_dir = Path.home() / ".esphome-integration-tests"
     cache_dir = test_cache_dir / "platformio"
-
-    # Create the temp directory that PlatformIO uses to avoid race conditions
-    # This ensures it exists and won't be deleted by parallel processes
-    platformio_tmp_dir = cache_dir / ".cache" / "tmp"
-    platformio_tmp_dir.mkdir(parents=True, exist_ok=True)
 
     # Use a lock file in the home directory to ensure only one process initializes the cache
     # This is needed when running with pytest-xdist
@@ -90,11 +83,17 @@ def shared_platformio_cache() -> Generator[Path]:
             test_cache_dir.mkdir(exist_ok=True)
 
             with tempfile.TemporaryDirectory() as tmpdir:
-                # Use the cache_init fixture for initialization
+                # Create a basic host config
                 init_dir = Path(tmpdir)
-                fixture_path = Path(__file__).parent / "fixtures" / "cache_init.yaml"
                 config_path = init_dir / "cache_init.yaml"
-                config_path.write_text(fixture_path.read_text())
+                config_path.write_text("""esphome:
+  name: cache-init
+host:
+api:
+  encryption:
+    key: "IIevImVI42I0FGos5nLqFK91jrJehrgidI0ArwMLr8w="
+logger:
+""")
 
                 # Run compilation to populate the cache
                 # We must succeed here to avoid race conditions where multiple
@@ -272,7 +271,7 @@ async def compile_esphome(
 
         def _read_config_and_get_binary():
             CORE.reset()  # Reset CORE state between test runs
-            CORE.config_path = config_path
+            CORE.config_path = str(config_path)
             config = esphome.config.read_config(
                 {"command": "compile", "config": str(config_path)}
             )
@@ -347,8 +346,7 @@ async def wait_and_connect_api_client(
     noise_psk: str | None = None,
     client_info: str = "integration-test",
     timeout: float = API_CONNECTION_TIMEOUT,
-    return_disconnect_event: bool = False,
-) -> AsyncGenerator[APIClient | tuple[APIClient, asyncio.Event]]:
+) -> AsyncGenerator[APIClient]:
     """Wait for API to be available and connect."""
     client = APIClient(
         address=address,
@@ -361,17 +359,14 @@ async def wait_and_connect_api_client(
     # Create a future to signal when connected
     loop = asyncio.get_running_loop()
     connected_future: asyncio.Future[None] = loop.create_future()
-    disconnect_event = asyncio.Event()
 
     async def on_connect() -> None:
         """Called when successfully connected."""
-        disconnect_event.clear()  # Clear the disconnect event on new connection
         if not connected_future.done():
             connected_future.set_result(None)
 
     async def on_disconnect(expected_disconnect: bool) -> None:
         """Called when disconnected."""
-        disconnect_event.set()
         if not connected_future.done() and not expected_disconnect:
             connected_future.set_exception(
                 APIConnectionError("Disconnected before fully connected")
@@ -402,10 +397,7 @@ async def wait_and_connect_api_client(
         except TimeoutError:
             raise TimeoutError(f"Failed to connect to API after {timeout} seconds")
 
-        if return_disconnect_event:
-            yield client, disconnect_event
-        else:
-            yield client
+        yield client
     finally:
         # Stop reconnect logic and disconnect
         await reconnect_logic.stop()
@@ -436,33 +428,6 @@ async def api_client_connected(
         )
 
     yield _connect_client
-
-
-@pytest_asyncio.fixture
-async def api_client_connected_with_disconnect(
-    unused_tcp_port: int,
-) -> AsyncGenerator:
-    """Factory for creating connected API client context managers with disconnect event."""
-
-    def _connect_client_with_disconnect(
-        address: str = LOCALHOST,
-        port: int | None = None,
-        password: str = "",
-        noise_psk: str | None = None,
-        client_info: str = "integration-test",
-        timeout: float = API_CONNECTION_TIMEOUT,
-    ):
-        return wait_and_connect_api_client(
-            address=address,
-            port=port if port is not None else unused_tcp_port,
-            password=password,
-            noise_psk=noise_psk,
-            client_info=client_info,
-            timeout=timeout,
-            return_disconnect_event=True,
-        )
-
-    yield _connect_client_with_disconnect
 
 
 async def _read_stream_lines(

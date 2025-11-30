@@ -1,7 +1,8 @@
 #include "light_effect.h"
 #include "light_state.h"
 
-namespace esphome::light {
+namespace esphome {
+namespace light {
 
 uint32_t LightEffect::get_index() const {
   if (this->state_ == nullptr) {
@@ -31,4 +32,5 @@ uint32_t LightEffect::get_index_in_parent_() const {
   return 0;  // Not found
 }
 
-}  // namespace esphome::light
+}  // namespace light
+}  // namespace esphome

@@ -9,7 +9,6 @@
 #include "esphome/components/uart/uart.h"
 #include "nextion_base.h"
 #include "nextion_component.h"
-#include "esphome/components/display/display.h"
 #include "esphome/components/display/display_color_utils.h"
 
 #ifdef USE_NEXTION_TFT_UPLOAD
@@ -32,7 +31,7 @@ namespace nextion {
 class Nextion;
 class NextionComponentBase;
 
-using nextion_writer_t = display::DisplayWriter<Nextion>;
+using nextion_writer_t = std::function<void(Nextion &)>;
 
 static const std::string COMMAND_DELIMITER{static_cast<char>(255), static_cast<char>(255), static_cast<char>(255)};
 
@@ -540,23 +539,6 @@ class Nextion : public NextionBase, public PollingComponent, public uart::UARTDe
    * Switches to the page named `main`. Pages are named in the Nextion Editor.
    */
   void goto_page(uint8_t page);
-
-  /**
-   * Set the visibility of a component.
-   *
-   * @param component The component name.
-   * @param show True to show the component, false to hide it.
-   *
-   * @see show_component()
-   * @see hide_component()
-   *
-   * Example:
-   * ```cpp
-   * it.set_component_visibility("textview", true);   // Equivalent to show_component("textview")
-   * it.set_component_visibility("textview", false);  // Equivalent to hide_component("textview")
-   * ```
-   */
-  void set_component_visibility(const char *component, bool show) override;
 
   /**
    * Hide a component.
@@ -1472,7 +1454,7 @@ class Nextion : public NextionBase, public PollingComponent, public uart::UARTDe
   CallbackManager<void(uint8_t, uint8_t, bool)> touch_callback_{};
   CallbackManager<void()> buffer_overflow_callback_{};
 
-  nextion_writer_t writer_;
+  optional<nextion_writer_t> writer_;
   optional<float> brightness_;
 
 #ifdef USE_NEXTION_CONFIG_DUMP_DEVICE_INFO

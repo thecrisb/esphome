@@ -5,24 +5,25 @@
 #include "esphome/core/component.h"
 #include "esphome/core/component_iterator.h"
 namespace esphome {
-#ifdef USE_ESP32
+#ifdef USE_ESP_IDF
 namespace web_server_idf {
 class AsyncEventSource;
 }
 #endif
 namespace web_server {
 
-#if !defined(USE_ESP32) && defined(USE_ARDUINO)
+#ifdef USE_ARDUINO
 class DeferredUpdateEventSource;
 #endif
 class WebServer;
 
 class ListEntitiesIterator : public ComponentIterator {
  public:
-#ifdef USE_ESP32
-  ListEntitiesIterator(const WebServer *ws, esphome::web_server_idf::AsyncEventSource *es);
-#elif defined(USE_ARDUINO)
+#ifdef USE_ARDUINO
   ListEntitiesIterator(const WebServer *ws, DeferredUpdateEventSource *es);
+#endif
+#ifdef USE_ESP_IDF
+  ListEntitiesIterator(const WebServer *ws, esphome::web_server_idf::AsyncEventSource *es);
 #endif
   virtual ~ListEntitiesIterator();
 #ifdef USE_BINARY_SENSOR
@@ -89,10 +90,11 @@ class ListEntitiesIterator : public ComponentIterator {
 
  protected:
   const WebServer *web_server_;
-#ifdef USE_ESP32
-  esphome::web_server_idf::AsyncEventSource *events_;
-#elif USE_ARDUINO
+#ifdef USE_ARDUINO
   DeferredUpdateEventSource *events_;
+#endif
+#ifdef USE_ESP_IDF
+  esphome::web_server_idf::AsyncEventSource *events_;
 #endif
 };
 

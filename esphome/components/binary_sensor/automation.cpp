@@ -1,11 +1,12 @@
 #include "automation.h"
 #include "esphome/core/log.h"
 
-namespace esphome::binary_sensor {
+namespace esphome {
+namespace binary_sensor {
 
 static const char *const TAG = "binary_sensor.automation";
 
-void MultiClickTrigger::on_state_(bool state) {
+void binary_sensor::MultiClickTrigger::on_state_(bool state) {
   // Handle duplicate events
   if (state == this->last_state_) {
     return;
@@ -66,7 +67,7 @@ void MultiClickTrigger::on_state_(bool state) {
 
   *this->at_index_ = *this->at_index_ + 1;
 }
-void MultiClickTrigger::schedule_cooldown_() {
+void binary_sensor::MultiClickTrigger::schedule_cooldown_() {
   ESP_LOGV(TAG, "Multi Click: Invalid length of press, starting cooldown of %" PRIu32 " ms", this->invalid_cooldown_);
   this->is_in_cooldown_ = true;
   this->set_timeout("cooldown", this->invalid_cooldown_, [this]() {
@@ -78,7 +79,7 @@ void MultiClickTrigger::schedule_cooldown_() {
   this->cancel_timeout("is_valid");
   this->cancel_timeout("is_not_valid");
 }
-void MultiClickTrigger::schedule_is_valid_(uint32_t min_length) {
+void binary_sensor::MultiClickTrigger::schedule_is_valid_(uint32_t min_length) {
   if (min_length == 0) {
     this->is_valid_ = true;
     return;
@@ -89,19 +90,19 @@ void MultiClickTrigger::schedule_is_valid_(uint32_t min_length) {
     this->is_valid_ = true;
   });
 }
-void MultiClickTrigger::schedule_is_not_valid_(uint32_t max_length) {
+void binary_sensor::MultiClickTrigger::schedule_is_not_valid_(uint32_t max_length) {
   this->set_timeout("is_not_valid", max_length, [this]() {
     ESP_LOGV(TAG, "Multi Click: You waited too long to %s.", this->parent_->state ? "RELEASE" : "PRESS");
     this->is_valid_ = false;
     this->schedule_cooldown_();
   });
 }
-void MultiClickTrigger::cancel() {
+void binary_sensor::MultiClickTrigger::cancel() {
   ESP_LOGV(TAG, "Multi Click: Sequence explicitly cancelled.");
   this->is_valid_ = false;
   this->schedule_cooldown_();
 }
-void MultiClickTrigger::trigger_() {
+void binary_sensor::MultiClickTrigger::trigger_() {
   ESP_LOGV(TAG, "Multi Click: Hooray, multi click is valid. Triggering!");
   this->at_index_.reset();
   this->cancel_timeout("trigger");
@@ -117,4 +118,5 @@ bool match_interval(uint32_t min_length, uint32_t max_length, uint32_t length) {
     return length >= min_length && length <= max_length;
   }
 }
-}  // namespace esphome::binary_sensor
+}  // namespace binary_sensor
+}  // namespace esphome

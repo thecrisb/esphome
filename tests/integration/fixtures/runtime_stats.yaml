@@ -32,7 +32,6 @@ switch:
     name: "Test Switch"
     id: test_switch
     optimistic: true
-    lambda: return false;
 
 interval:
   - interval: 0.5s

@@ -85,28 +85,22 @@ network::IPAddresses get_ip_addresses() {
   return {};
 }
 
-const char *get_use_address() {
-  // Global component pointers are guaranteed to be set by component constructors when USE_* is defined
+std::string get_use_address() {
 #ifdef USE_ETHERNET
-  return ethernet::global_eth_component->get_use_address();
+  if (ethernet::global_eth_component != nullptr)
+    return ethernet::global_eth_component->get_use_address();
 #endif
 
 #ifdef USE_MODEM
-  return modem::global_modem_component->get_use_address();
+  if (modem::global_modem_component != nullptr)
+    return modem::global_modem_component->get_use_address();
 #endif
 
 #ifdef USE_WIFI
-  return wifi::global_wifi_component->get_use_address();
+  if (wifi::global_wifi_component != nullptr)
+    return wifi::global_wifi_component->get_use_address();
 #endif
-
-#ifdef USE_OPENTHREAD
-  return openthread::global_openthread_component->get_use_address();
-#endif
-
-#if !defined(USE_ETHERNET) && !defined(USE_MODEM) && !defined(USE_WIFI) && !defined(USE_OPENTHREAD)
-  // Fallback when no network component is defined (e.g., host platform)
   return "";
-#endif
 }
 
 }  // namespace network

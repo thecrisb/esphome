@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 from contextlib import suppress
 import ipaddress
 import logging
@@ -7,15 +8,10 @@ import os
 from pathlib import Path
 import platform
 import re
-import shutil
 import tempfile
-from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 from esphome.const import __version__ as ESPHOME_VERSION
-
-if TYPE_CHECKING:
-    from esphome.address_cache import AddressCache
 
 # Type aliases for socket address information
 AddrInfo = tuple[
@@ -140,16 +136,16 @@ def run_system_command(*args):
         return rc, stdout, stderr
 
 
-def mkdir_p(path: Path):
+def mkdir_p(path):
     if not path:
         # Empty path - means create current dir
         return
     try:
-        path.mkdir(parents=True, exist_ok=True)
+        os.makedirs(path)
     except OSError as err:
         import errno
 
-        if err.errno == errno.EEXIST and path.is_dir():
+        if err.errno == errno.EEXIST and os.path.isdir(path):
             pass
         else:
             from esphome.core import EsphomeError
@@ -177,24 +173,7 @@ def addr_preference_(res: AddrInfo) -> int:
     return 1
 
 
-def _add_ip_addresses_to_addrinfo(
-    addresses: list[str], port: int, res: list[AddrInfo]
-) -> None:
-    """Helper to add IP addresses to addrinfo results with error handling."""
-    import socket
-
-    for addr in addresses:
-        try:
-            res += socket.getaddrinfo(
-                addr, port, proto=socket.IPPROTO_TCP, flags=socket.AI_NUMERICHOST
-            )
-        except OSError:
-            _LOGGER.debug("Failed to parse IP address '%s'", addr)
-
-
-def resolve_ip_address(
-    host: str | list[str], port: int, address_cache: AddressCache | None = None
-) -> list[AddrInfo]:
+def resolve_ip_address(host: str | list[str], port: int) -> list[AddrInfo]:
     import socket
 
     # There are five cases here. The host argument could be one of:
@@ -215,70 +194,47 @@ def resolve_ip_address(
         hosts = [host]
 
     res: list[AddrInfo] = []
-
-    # Fast path: if all hosts are already IP addresses
     if all(is_ip_address(h) for h in hosts):
-        _add_ip_addresses_to_addrinfo(hosts, port, res)
+        # Fast path: all are IP addresses, use socket.getaddrinfo with AI_NUMERICHOST
+        for addr in hosts:
+            try:
+                res += socket.getaddrinfo(
+                    addr, port, proto=socket.IPPROTO_TCP, flags=socket.AI_NUMERICHOST
+                )
+            except OSError:
+                _LOGGER.debug("Failed to parse IP address '%s'", addr)
         # Sort by preference
         res.sort(key=addr_preference_)
         return res
 
-    # Process hosts
+    from esphome.resolver import AsyncResolver
 
-    uncached_hosts: list[str] = []
-
-    for h in hosts:
-        if is_ip_address(h):
-            _add_ip_addresses_to_addrinfo([h], port, res)
-        elif address_cache and (cached := address_cache.get_addresses(h)):
-            _add_ip_addresses_to_addrinfo(cached, port, res)
-        else:
-            # Not cached, need to resolve
-            if address_cache and address_cache.has_cache():
-                _LOGGER.info("Host %s not in cache, will need to resolve", h)
-            uncached_hosts.append(h)
-
-    # If we have uncached hosts (only non-IP hostnames), resolve them
-    if uncached_hosts:
-        from aioesphomeapi.host_resolver import AddrInfo as AioAddrInfo
-
-        from esphome.core import EsphomeError
-        from esphome.resolver import AsyncResolver
-
-        resolver = AsyncResolver(uncached_hosts, port)
-        addr_infos: list[AioAddrInfo] = []
-        try:
-            addr_infos = resolver.resolve()
-        except EsphomeError as err:
-            if not res:
-                # No pre-resolved addresses available, DNS resolution is fatal
-                raise
-            _LOGGER.info("%s (using %d already resolved IP addresses)", err, len(res))
-
-        # Convert aioesphomeapi AddrInfo to our format
-        for addr_info in addr_infos:
-            sockaddr = addr_info.sockaddr
-            if addr_info.family == socket.AF_INET6:
-                # IPv6
-                sockaddr_tuple = (
-                    sockaddr.address,
-                    sockaddr.port,
-                    sockaddr.flowinfo,
-                    sockaddr.scope_id,
-                )
-            else:
-                # IPv4
-                sockaddr_tuple = (sockaddr.address, sockaddr.port)
-
-            res.append(
-                (
-                    addr_info.family,
-                    addr_info.type,
-                    addr_info.proto,
-                    "",  # canonname
-                    sockaddr_tuple,
-                )
+    resolver = AsyncResolver(hosts, port)
+    addr_infos = resolver.resolve()
+    # Convert aioesphomeapi AddrInfo to our format
+    for addr_info in addr_infos:
+        sockaddr = addr_info.sockaddr
+        if addr_info.family == socket.AF_INET6:
+            # IPv6
+            sockaddr_tuple = (
+                sockaddr.address,
+                sockaddr.port,
+                sockaddr.flowinfo,
+                sockaddr.scope_id,
             )
+        else:
+            # IPv4
+            sockaddr_tuple = (sockaddr.address, sockaddr.port)
+
+        res.append(
+            (
+                addr_info.family,
+                addr_info.type,
+                addr_info.proto,
+                "",  # canonname
+                sockaddr_tuple,
+            )
+        )
 
     # Sort by preference
     res.sort(key=addr_preference_)
@@ -300,7 +256,14 @@ def sort_ip_addresses(address_list: list[str]) -> list[str]:
     # First "resolve" all the IP addresses to getaddrinfo() tuples of the form
     # (family, type, proto, canonname, sockaddr)
     res: list[AddrInfo] = []
-    _add_ip_addresses_to_addrinfo(address_list, 0, res)
+    for addr in address_list:
+        # This should always work as these are supposed to be IP addresses
+        try:
+            res += socket.getaddrinfo(
+                addr, 0, proto=socket.IPPROTO_TCP, flags=socket.AI_NUMERICHOST
+            )
+        except OSError:
+            _LOGGER.info("Failed to parse IP address '%s'", addr)
 
     # Now use that information to sort them.
     res.sort(key=addr_preference_)
@@ -332,15 +295,16 @@ def is_ha_addon():
     return get_bool_env("ESPHOME_IS_HA_ADDON")
 
 
-def walk_files(path: Path):
+def walk_files(path):
     for root, _, files in os.walk(path):
         for name in files:
-            yield Path(root) / name
+            yield os.path.join(root, name)
 
 
-def read_file(path: Path) -> str:
+def read_file(path):
     try:
-        return path.read_text(encoding="utf-8")
+        with codecs.open(path, "r", encoding="utf-8") as f_handle:
+            return f_handle.read()
     except OSError as err:
         from esphome.core import EsphomeError
 
@@ -351,15 +315,13 @@ def read_file(path: Path) -> str:
         raise EsphomeError(f"Error reading file {path}: {err}") from err
 
 
-def _write_file(
-    path: Path,
-    text: str | bytes,
-    private: bool = False,
-) -> None:
+def _write_file(path: Path | str, text: str | bytes):
     """Atomically writes `text` to the given path.
 
     Automatically creates all parent directories.
     """
+    if not isinstance(path, Path):
+        path = Path(path)
     data = text
     if isinstance(text, str):
         data = text.encode()
@@ -367,54 +329,42 @@ def _write_file(
     directory = path.parent
     directory.mkdir(exist_ok=True, parents=True)
 
-    tmp_filename: Path | None = None
-    missing_fchmod = False
+    tmp_path = None
     try:
-        # Modern versions of Python tempfile create this file with mode 0o600
         with tempfile.NamedTemporaryFile(
             mode="wb", dir=directory, delete=False
         ) as f_handle:
+            tmp_path = f_handle.name
             f_handle.write(data)
-            tmp_filename = Path(f_handle.name)
-
-            if not private:
-                try:
-                    os.fchmod(f_handle.fileno(), 0o644)
-                except AttributeError:
-                    # os.fchmod is not available on Windows
-                    missing_fchmod = True
-        shutil.move(tmp_filename, path)
-        if missing_fchmod:
-            path.chmod(0o644)
+        # Newer tempfile implementations create the file with mode 0o600
+        os.chmod(tmp_path, 0o644)
+        # If destination exists, will be overwritten
+        os.replace(tmp_path, path)
     finally:
-        if tmp_filename and tmp_filename.exists():
+        if tmp_path is not None and os.path.exists(tmp_path):
             try:
-                tmp_filename.unlink()
+                os.remove(tmp_path)
             except OSError as err:
-                # If we are cleaning up then something else went wrong, so
-                # we should suppress likely follow-on errors in the cleanup
-                _LOGGER.error(
-                    "File replacement cleanup failed for %s while saving %s: %s",
-                    tmp_filename,
-                    path,
-                    err,
-                )
+                _LOGGER.error("Write file cleanup failed: %s", err)
 
 
-def write_file(path: Path, text: str | bytes, private: bool = False) -> None:
+def write_file(path: Path | str, text: str):
     try:
-        _write_file(path, text, private=private)
+        _write_file(path, text)
     except OSError as err:
         from esphome.core import EsphomeError
 
         raise EsphomeError(f"Could not write file at {path}") from err
 
 
-def write_file_if_changed(path: Path, text: str) -> bool:
+def write_file_if_changed(path: Path | str, text: str) -> bool:
     """Write text to the given path, but not if the contents match already.
 
     Returns true if the file was changed.
     """
+    if not isinstance(path, Path):
+        path = Path(path)
+
     src_content = None
     if path.is_file():
         src_content = read_file(path)
@@ -424,10 +374,12 @@ def write_file_if_changed(path: Path, text: str) -> bool:
     return True
 
 
-def copy_file_if_changed(src: Path, dst: Path) -> None:
+def copy_file_if_changed(src: os.PathLike, dst: os.PathLike) -> None:
+    import shutil
+
     if file_compare(src, dst):
         return
-    dst.parent.mkdir(parents=True, exist_ok=True)
+    mkdir_p(os.path.dirname(dst))
     try:
         shutil.copyfile(src, dst)
     except OSError as err:
@@ -452,12 +404,12 @@ def list_starts_with(list_, sub):
     return len(sub) <= len(list_) and all(list_[i] == x for i, x in enumerate(sub))
 
 
-def file_compare(path1: Path, path2: Path) -> bool:
+def file_compare(path1: os.PathLike, path2: os.PathLike) -> bool:
     """Return True if the files path1 and path2 have the same contents."""
     import stat
 
     try:
-        stat1, stat2 = path1.stat(), path2.stat()
+        stat1, stat2 = os.stat(path1), os.stat(path2)
     except OSError:
         # File doesn't exist or another error -> not equal
         return False
@@ -474,7 +426,7 @@ def file_compare(path1: Path, path2: Path) -> bool:
 
     bufsize = 8 * 1024
     # Read files in blocks until a mismatch is found
-    with path1.open("rb") as fh1, path2.open("rb") as fh2:
+    with open(path1, "rb") as fh1, open(path2, "rb") as fh2:
         while True:
             blob1, blob2 = fh1.read(bufsize), fh2.read(bufsize)
             if blob1 != blob2:

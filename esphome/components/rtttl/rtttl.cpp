@@ -35,9 +35,9 @@ void Rtttl::dump_config() {
 
 void Rtttl::play(std::string rtttl) {
   if (this->state_ != State::STATE_STOPPED && this->state_ != State::STATE_STOPPING) {
-    size_t pos = this->rtttl_.find(':');
-    size_t len = (pos != std::string::npos) ? pos : this->rtttl_.length();
-    ESP_LOGW(TAG, "Already playing: %.*s", (int) len, this->rtttl_.c_str());
+    int pos = this->rtttl_.find(':');
+    auto name = this->rtttl_.substr(0, pos);
+    ESP_LOGW(TAG, "Already playing: %s", name.c_str());
     return;
   }
 
@@ -59,7 +59,8 @@ void Rtttl::play(std::string rtttl) {
     return;
   }
 
-  ESP_LOGD(TAG, "Playing song %.*s", (int) this->position_, this->rtttl_.c_str());
+  auto name = this->rtttl_.substr(0, this->position_);
+  ESP_LOGD(TAG, "Playing song %s", name.c_str());
 
   // get default duration
   this->position_ = this->rtttl_.find("d=", this->position_);
@@ -214,7 +215,7 @@ void Rtttl::loop() {
           sample[x].right = 0;
         }
 
-        if (static_cast<size_t>(x) >= SAMPLE_BUFFER_SIZE || this->samples_sent_ >= this->samples_count_) {
+        if (x >= SAMPLE_BUFFER_SIZE || this->samples_sent_ >= this->samples_count_) {
           break;
         }
         this->samples_sent_++;
@@ -373,7 +374,7 @@ void Rtttl::loop() {
   this->last_note_ = millis();
 }
 
-#if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_VERBOSE
+#if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_DEBUG
 static const LogString *state_to_string(State state) {
   switch (state) {
     case STATE_STOPPED:

@@ -5,15 +5,22 @@
 #include "esphome/core/helpers.h"
 #include "esphome/components/text_sensor/filter.h"
 
-#include <initializer_list>
+#include <vector>
 #include <memory>
 
 namespace esphome {
 namespace text_sensor {
 
-void log_text_sensor(const char *tag, const char *prefix, const char *type, TextSensor *obj);
-
-#define LOG_TEXT_SENSOR(prefix, type, obj) log_text_sensor(TAG, prefix, LOG_STR_LITERAL(type), obj)
+#define LOG_TEXT_SENSOR(prefix, type, obj) \
+  if ((obj) != nullptr) { \
+    ESP_LOGCONFIG(TAG, "%s%s '%s'", prefix, LOG_STR_LITERAL(type), (obj)->get_name().c_str()); \
+    if (!(obj)->get_device_class_ref().empty()) { \
+      ESP_LOGCONFIG(TAG, "%s  Device Class: '%s'", prefix, (obj)->get_device_class_ref().c_str()); \
+    } \
+    if (!(obj)->get_icon_ref().empty()) { \
+      ESP_LOGCONFIG(TAG, "%s  Icon: '%s'", prefix, (obj)->get_icon_ref().c_str()); \
+    } \
+  }
 
 #define SUB_TEXT_SENSOR(name) \
  protected: \
@@ -37,10 +44,10 @@ class TextSensor : public EntityBase, public EntityBase_DeviceClass {
   void add_filter(Filter *filter);
 
   /// Add a list of vectors to the back of the filter chain.
-  void add_filters(std::initializer_list<Filter *> filters);
+  void add_filters(const std::vector<Filter *> &filters);
 
   /// Clear the filters and replace them by filters.
-  void set_filters(std::initializer_list<Filter *> filters);
+  void set_filters(const std::vector<Filter *> &filters);
 
   /// Clear the entire filter chain.
   void clear_filters();

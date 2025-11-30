@@ -1,5 +1,4 @@
-from pathlib import Path
-import textwrap
+import os
 from typing import TypedDict
 
 import esphome.codegen as cg
@@ -49,7 +48,7 @@ class ZephyrData(TypedDict):
     bootloader: str
     prj_conf: dict[str, tuple[PrjConfValueType, bool]]
     overlay: str
-    extra_build_files: dict[str, Path]
+    extra_build_files: dict[str, str]
     pm_static: list[Section]
     user: dict[str, list[str]]
 
@@ -91,10 +90,10 @@ def zephyr_add_prj_conf(
 
 
 def zephyr_add_overlay(content):
-    zephyr_data()[KEY_OVERLAY] += textwrap.dedent(content)
+    zephyr_data()[KEY_OVERLAY] += content
 
 
-def add_extra_build_file(filename: str, path: Path) -> bool:
+def add_extra_build_file(filename: str, path: str) -> bool:
     """Add an extra build file to the project."""
     extra_build_files = zephyr_data()[KEY_EXTRA_BUILD_FILES]
     if filename not in extra_build_files:
@@ -103,7 +102,7 @@ def add_extra_build_file(filename: str, path: Path) -> bool:
     return False
 
 
-def add_extra_script(stage: str, filename: str, path: Path) -> None:
+def add_extra_script(stage: str, filename: str, path: str):
     """Add an extra script to the project."""
     key = f"{stage}:{filename}"
     if add_extra_build_file(filename, path):
@@ -145,7 +144,7 @@ def zephyr_to_code(config):
     add_extra_script(
         "pre",
         "pre_build.py",
-        Path(__file__).parent / "pre_build.py.script",
+        os.path.join(os.path.dirname(__file__), "pre_build.py.script"),
     )
 
 
@@ -223,28 +222,18 @@ def copy_files():
     ] in ["xiao_ble"]:
         fake_board_manifest = """
 {
-    "frameworks": [
-        "zephyr"
-    ],
-    "name": "esphome nrf52",
-    "upload": {
-        "maximum_ram_size": 248832,
-        "maximum_size": 815104,
-        "speed": 115200
-    },
-    "url": "https://esphome.io/",
-    "vendor": "esphome",
-    "build": {
-        "bsp": {
-            "name": "adafruit"
-        },
-        "softdevice": {
-            "sd_fwid": "0x00B6"
-        }
-    }
+"frameworks": [
+    "zephyr"
+],
+"name": "esphome nrf52",
+"upload": {
+    "maximum_ram_size": 248832,
+    "maximum_size": 815104
+},
+"url": "https://esphome.io/",
+"vendor": "esphome"
 }
 """
-
         write_file_if_changed(
             CORE.relative_build_path(f"boards/{zephyr_data()[KEY_BOARD]}.json"),
             fake_board_manifest,

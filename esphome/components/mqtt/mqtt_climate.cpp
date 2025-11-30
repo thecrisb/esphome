@@ -17,11 +17,11 @@ void MQTTClimateComponent::send_discovery(JsonObject root, mqtt::SendDiscoveryCo
   // NOLINTBEGIN(clang-analyzer-cplusplus.NewDeleteLeaks) false positive with ArduinoJson
   auto traits = this->device_->get_traits();
   // current_temperature_topic
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE)) {
+  if (traits.get_supports_current_temperature()) {
     root[MQTT_CURRENT_TEMPERATURE_TOPIC] = this->get_current_temperature_state_topic();
   }
   // current_humidity_topic
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_HUMIDITY)) {
+  if (traits.get_supports_current_humidity()) {
     root[MQTT_CURRENT_HUMIDITY_TOPIC] = this->get_current_humidity_state_topic();
   }
   // mode_command_topic
@@ -45,8 +45,7 @@ void MQTTClimateComponent::send_discovery(JsonObject root, mqtt::SendDiscoveryCo
   if (traits.supports_mode(CLIMATE_MODE_HEAT_COOL))
     modes.add("heat_cool");
 
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_TWO_POINT_TARGET_TEMPERATURE |
-                               climate::CLIMATE_REQUIRES_TWO_POINT_TARGET_TEMPERATURE)) {
+  if (traits.get_supports_two_point_target_temperature()) {
     // temperature_low_command_topic
     root[MQTT_TEMPERATURE_LOW_COMMAND_TOPIC] = this->get_target_temperature_low_command_topic();
     // temperature_low_state_topic
@@ -62,7 +61,7 @@ void MQTTClimateComponent::send_discovery(JsonObject root, mqtt::SendDiscoveryCo
     root[MQTT_TEMPERATURE_STATE_TOPIC] = this->get_target_temperature_state_topic();
   }
 
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_TARGET_HUMIDITY)) {
+  if (traits.get_supports_target_humidity()) {
     // target_humidity_command_topic
     root[MQTT_TARGET_HUMIDITY_COMMAND_TOPIC] = this->get_target_humidity_command_topic();
     // target_humidity_state_topic
@@ -110,7 +109,7 @@ void MQTTClimateComponent::send_discovery(JsonObject root, mqtt::SendDiscoveryCo
       presets.add(preset);
   }
 
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_ACTION)) {
+  if (traits.get_supports_action()) {
     // action_topic
     root[MQTT_ACTION_TOPIC] = this->get_action_state_topic();
   }
@@ -175,8 +174,7 @@ void MQTTClimateComponent::setup() {
     call.perform();
   });
 
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_TWO_POINT_TARGET_TEMPERATURE |
-                               climate::CLIMATE_REQUIRES_TWO_POINT_TARGET_TEMPERATURE)) {
+  if (traits.get_supports_two_point_target_temperature()) {
     this->subscribe(this->get_target_temperature_low_command_topic(),
                     [this](const std::string &topic, const std::string &payload) {
                       auto val = parse_number<float>(payload);
@@ -213,7 +211,7 @@ void MQTTClimateComponent::setup() {
                     });
   }
 
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_TARGET_HUMIDITY)) {
+  if (traits.get_supports_target_humidity()) {
     this->subscribe(this->get_target_humidity_command_topic(),
                     [this](const std::string &topic, const std::string &payload) {
                       auto val = parse_number<float>(payload);
@@ -292,14 +290,12 @@ bool MQTTClimateComponent::publish_state_() {
     success = false;
   int8_t target_accuracy = traits.get_target_temperature_accuracy_decimals();
   int8_t current_accuracy = traits.get_current_temperature_accuracy_decimals();
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE) &&
-      !std::isnan(this->device_->current_temperature)) {
+  if (traits.get_supports_current_temperature() && !std::isnan(this->device_->current_temperature)) {
     std::string payload = value_accuracy_to_string(this->device_->current_temperature, current_accuracy);
     if (!this->publish(this->get_current_temperature_state_topic(), payload))
       success = false;
   }
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_TWO_POINT_TARGET_TEMPERATURE |
-                               climate::CLIMATE_REQUIRES_TWO_POINT_TARGET_TEMPERATURE)) {
+  if (traits.get_supports_two_point_target_temperature()) {
     std::string payload = value_accuracy_to_string(this->device_->target_temperature_low, target_accuracy);
     if (!this->publish(this->get_target_temperature_low_state_topic(), payload))
       success = false;
@@ -312,14 +308,12 @@ bool MQTTClimateComponent::publish_state_() {
       success = false;
   }
 
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_HUMIDITY) &&
-      !std::isnan(this->device_->current_humidity)) {
+  if (traits.get_supports_current_humidity() && !std::isnan(this->device_->current_humidity)) {
     std::string payload = value_accuracy_to_string(this->device_->current_humidity, 0);
     if (!this->publish(this->get_current_humidity_state_topic(), payload))
       success = false;
   }
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_TARGET_HUMIDITY) &&
-      !std::isnan(this->device_->target_humidity)) {
+  if (traits.get_supports_target_humidity() && !std::isnan(this->device_->target_humidity)) {
     std::string payload = value_accuracy_to_string(this->device_->target_humidity, 0);
     if (!this->publish(this->get_target_humidity_state_topic(), payload))
       success = false;
@@ -357,13 +351,13 @@ bool MQTTClimateComponent::publish_state_() {
           payload = "unknown";
       }
     }
-    if (this->device_->has_custom_preset())
-      payload = this->device_->get_custom_preset();
+    if (this->device_->custom_preset.has_value())
+      payload = this->device_->custom_preset.value();
     if (!this->publish(this->get_preset_state_topic(), payload))
       success = false;
   }
 
-  if (traits.has_feature_flags(climate::CLIMATE_SUPPORTS_ACTION)) {
+  if (traits.get_supports_action()) {
     const char *payload;
     switch (this->device_->action) {
       case CLIMATE_ACTION_OFF:
@@ -429,8 +423,8 @@ bool MQTTClimateComponent::publish_state_() {
           payload = "unknown";
       }
     }
-    if (this->device_->has_custom_fan_mode())
-      payload = this->device_->get_custom_fan_mode();
+    if (this->device_->custom_fan_mode.has_value())
+      payload = this->device_->custom_fan_mode.value();
     if (!this->publish(this->get_fan_mode_state_topic(), payload))
       success = false;
   }

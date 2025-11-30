@@ -15,14 +15,7 @@ static const char *const TAG = "lt.preferences";
 
 struct NVSData {
   std::string key;
-  std::unique_ptr<uint8_t[]> data;
-  size_t len;
-
-  void set_data(const uint8_t *src, size_t size) {
-    data = std::make_unique<uint8_t[]>(size);
-    memcpy(data.get(), src, size);
-    len = size;
-  }
+  std::vector<uint8_t> data;
 };
 
 static std::vector<NVSData> s_pending_save;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -37,15 +30,15 @@ class LibreTinyPreferenceBackend : public ESPPreferenceBackend {
     // try find in pending saves and update that
     for (auto &obj : s_pending_save) {
       if (obj.key == key) {
-        obj.set_data(data, len);
+        obj.data.assign(data, data + len);
         return true;
       }
     }
     NVSData save{};
     save.key = key;
-    save.set_data(data, len);
-    s_pending_save.emplace_back(std::move(save));
-    ESP_LOGVV(TAG, "s_pending_save: key: %s, len: %zu", key.c_str(), len);
+    save.data.assign(data, data + len);
+    s_pending_save.emplace_back(save);
+    ESP_LOGVV(TAG, "s_pending_save: key: %s, len: %d", key.c_str(), len);
     return true;
   }
 
@@ -53,11 +46,11 @@ class LibreTinyPreferenceBackend : public ESPPreferenceBackend {
     // try find in pending saves and load from that
     for (auto &obj : s_pending_save) {
       if (obj.key == key) {
-        if (obj.len != len) {
+        if (obj.data.size() != len) {
           // size mismatch
           return false;
         }
-        memcpy(data, obj.data.get(), len);
+        memcpy(data, obj.data.data(), len);
         return true;
       }
     }
@@ -65,10 +58,10 @@ class LibreTinyPreferenceBackend : public ESPPreferenceBackend {
     fdb_blob_make(blob, data, len);
     size_t actual_len = fdb_kv_get_blob(db, key.c_str(), blob);
     if (actual_len != len) {
-      ESP_LOGVV(TAG, "NVS length does not match (%zu!=%zu)", actual_len, len);
+      ESP_LOGVV(TAG, "NVS length does not match (%u!=%u)", actual_len, len);
       return false;
     } else {
-      ESP_LOGVV(TAG, "fdb_kv_get_blob: key: %s, len: %zu", key.c_str(), len);
+      ESP_LOGVV(TAG, "fdb_kv_get_blob: key: %s, len: %d", key.c_str(), len);
     }
     return true;
   }
@@ -108,7 +101,7 @@ class LibreTinyPreferences : public ESPPreferences {
     if (s_pending_save.empty())
       return true;
 
-    ESP_LOGV(TAG, "Saving %zu items...", s_pending_save.size());
+    ESP_LOGV(TAG, "Saving %d items...", s_pending_save.size());
     // goal try write all pending saves even if one fails
     int cached = 0, written = 0, failed = 0;
     fdb_err_t last_err = FDB_NO_ERR;
@@ -119,11 +112,11 @@ class LibreTinyPreferences : public ESPPreferences {
       const auto &save = s_pending_save[i];
       ESP_LOGVV(TAG, "Checking if FDB data %s has changed", save.key.c_str());
       if (is_changed(&db, save)) {
-        ESP_LOGV(TAG, "sync: key: %s, len: %zu", save.key.c_str(), save.len);
-        fdb_blob_make(&blob, save.data.get(), save.len);
+        ESP_LOGV(TAG, "sync: key: %s, len: %d", save.key.c_str(), save.data.size());
+        fdb_blob_make(&blob, save.data.data(), save.data.size());
         fdb_err_t err = fdb_kv_set_blob(&db, save.key.c_str(), &blob);
         if (err != FDB_NO_ERR) {
-          ESP_LOGV(TAG, "fdb_kv_set_blob('%s', len=%zu) failed: %d", save.key.c_str(), save.len, err);
+          ESP_LOGV(TAG, "fdb_kv_set_blob('%s', len=%u) failed: %d", save.key.c_str(), save.data.size(), err);
           failed++;
           last_err = err;
           last_key = save.key;
@@ -131,7 +124,7 @@ class LibreTinyPreferences : public ESPPreferences {
         }
         written++;
       } else {
-        ESP_LOGD(TAG, "FDB data not changed; skipping %s  len=%zu", save.key.c_str(), save.len);
+        ESP_LOGD(TAG, "FDB data not changed; skipping %s  len=%u", save.key.c_str(), save.data.size());
         cached++;
       }
       s_pending_save.erase(s_pending_save.begin() + i);
@@ -154,7 +147,7 @@ class LibreTinyPreferences : public ESPPreferences {
     }
 
     // Check size first - if different, data has changed
-    if (kv.value_len != to_save.len) {
+    if (kv.value_len != to_save.data.size()) {
       return true;
     }
 
@@ -168,7 +161,7 @@ class LibreTinyPreferences : public ESPPreferences {
     }
 
     // Compare the actual data
-    return memcmp(to_save.data.get(), stored_data.get(), kv.value_len) != 0;
+    return memcmp(to_save.data.data(), stored_data.get(), kv.value_len) != 0;
   }
 
   bool reset() override {

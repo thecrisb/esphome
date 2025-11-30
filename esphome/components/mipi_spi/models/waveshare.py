@@ -3,7 +3,6 @@ import esphome.config_validation as cv
 
 from .amoled import CO5300
 from .ili import ILI9488_A
-from .jc import AXS15231
 
 DriverChip(
     "WAVESHARE-4-TFT",
@@ -152,13 +151,4 @@ CO5300.extend(
     offset_width=6,
     cs_pin=12,
     reset_pin=39,
-)
-
-AXS15231.extend(
-    "WAVESHARE-ESP32-S3-TOUCH-LCD-3.49",
-    width=172,
-    height=640,
-    data_rate="80MHz",
-    cs_pin=9,
-    reset_pin=21,
 )
