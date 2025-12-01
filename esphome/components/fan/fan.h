@@ -74,6 +74,10 @@ class FanCall {
   FanCall &set_preset_mode(const char *preset_mode);
   const char *get_preset_mode() const { return this->preset_mode_; }
   bool has_preset_mode() const { return this->preset_mode_ != nullptr; }
+  FanCall &retain_preset(bool retain = true) {
+    this->retain_preset_ = retain;
+    return *this;
+  }
 
   void perform();
 
@@ -86,6 +90,7 @@ class FanCall {
   optional<int> speed_;
   optional<FanDirection> direction_{};
   const char *preset_mode_{nullptr};  // Pointer to string in traits (after validation)
+  bool retain_preset_{false};
 };
 
 struct FanRestoreState {

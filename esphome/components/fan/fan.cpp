@@ -69,9 +69,15 @@ void FanCall::validate_() {
 
     // https://developers.home-assistant.io/docs/core/entity/fan/#preset-modes
     // "Manually setting a speed must disable any set preset mode"
-    this->preset_mode_ = nullptr;
+    if (!this->retain_preset_){
+      this->preset_mode_ = nullptr;
+    }
   }
 
+  if (this->retain_preset_ && this->preset_mode_ == nullptr){
+    this->preset_mode_ = this->parent_.preset_mode;
+  }
+  
   // when turning on...
   if (!this->parent_.state && this->binary_state_.has_value() &&
       *this->binary_state_
