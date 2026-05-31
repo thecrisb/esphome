@@ -82,6 +82,10 @@ void FanCall::perform() {
 void FanCall::validate_() {
   auto traits = this->parent_.get_traits();
 
+  /* Why would we be callint his with fan speed set when the user manually sets a speed?
+      Also prevent scripts from Automatically setting the speed when the user has requested
+      an "automatic speed" preset
+    
   if (this->speed_.has_value()) {
     this->speed_ = clamp(*this->speed_, 1, traits.supported_speed_count());
 
@@ -89,7 +93,8 @@ void FanCall::validate_() {
     // "Manually setting a speed must disable any set preset mode"
     this->preset_mode_ = nullptr;
   }
-
+  */
+  
   // when turning on...
   if (!this->parent_.state && this->binary_state_.has_value() &&
       *this->binary_state_
