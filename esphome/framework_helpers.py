@@ -42,20 +42,26 @@ _MIRROR_ATTEMPTS = 3
 _MIRROR_SWEEP_ATTEMPTS = NETWORK_MAX_ATTEMPTS
 
 
-def get_project_link_flags() -> list[str]:
-    """Return the sorted -Wl, linker flags from the current build."""
+def get_project_link_flags(flags: Iterable[str] | None = None) -> list[str]:
+    """Return the -Wl, linker flags from ``flags`` in their given order
+    (default: the current build's flags, sorted)."""
     from esphome.core import CORE  # local import to avoid circular dependency
 
-    return sorted(flag for flag in CORE.build_flags if flag.startswith("-Wl,"))
+    if flags is None:
+        flags = sorted(CORE.build_flags)
+    return [flag for flag in flags if flag.startswith("-Wl,")]
 
 
-def get_project_compile_flags() -> list[str]:
-    """Return the sorted -D and -W (non-linker) flags from the current build."""
+def get_project_compile_flags(flags: Iterable[str] | None = None) -> list[str]:
+    """Return the -D and -W (non-linker) flags from ``flags`` in their given
+    order (default: the current build's flags, sorted)."""
     from esphome.core import CORE  # local import to avoid circular dependency
 
+    if flags is None:
+        flags = sorted(CORE.build_flags)
     return [
         flag
-        for flag in sorted(CORE.build_flags)
+        for flag in flags
         if flag.startswith("-D")
         or (flag.startswith("-W") and not flag.startswith("-Wl,"))
     ]
@@ -205,28 +211,42 @@ def run_command(
         return False, None, None
 
 
-def tool_version_runs(binary: str, warning: str) -> bool:
-    """Probe ``binary --version``; on failure warn with ``warning`` % binary.
+def tool_version_probe(binary: str) -> str | Exception:
+    """Run ``binary --version``: its stdout, or the error when it fails to run.
 
     ``shutil.which`` proves existence, not runnability (Windows .bat/.cmd
     shims, stale package-manager shims).
     """
     try:
-        subprocess.run(
+        result = subprocess.run(
             [binary, "--version"],
             check=True,
-            stdout=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            text=True,
+            errors="replace",
             timeout=15,
             # Repo-wide convention (posix_spawn fast path)
             close_fds=False,
         )
     except (OSError, subprocess.SubprocessError) as err:
-        # The cause (permission denied, missing DLL, timeout) is the one
-        # detail the user needs to fix it
-        _LOGGER.warning("%s (%s)", warning % binary, err)
-        return False
-    return True
+        return err
+    return result.stdout
+
+
+def tool_version_runs(
+    binary: str,
+    warning: str,
+    probe: Callable[[str], str | Exception] = tool_version_probe,
+) -> bool:
+    """Probe ``binary --version``; on failure warn with ``warning`` % binary.
+    ``probe`` lets a caller supply a cached probe."""
+    if not isinstance(result := probe(binary), Exception):
+        return True
+    # The cause (permission denied, missing DLL, timeout) is the one detail
+    # the user needs to fix it
+    _LOGGER.warning("%s (%s)", warning % binary, result)
+    return False
 
 
 def run_command_ok(*args, **kwargs) -> bool:
@@ -461,7 +481,7 @@ def _zip_extract_all(
             report(1)
 
 
-def _rename_with_retry(
+def rename_with_retry(
     src: Path, dst: Path, attempts: int = 5, overwrite: bool = False
 ) -> None:
     """Rename ``src`` to ``dst`` with backoff retries on Windows sharing violations.
@@ -561,7 +581,7 @@ def _7z_extract_all(
                     rmtree(dest)
                 else:
                     dest.unlink()
-            _rename_with_retry(item, dest)
+            rename_with_retry(item, dest)
     finally:
         # staging is created before the try, so it always exists here; the
         # guard is defensive cleanup and its False branch is unreachable.
@@ -1193,7 +1213,7 @@ def download_with_resume(
             # retries fail, keep the verified part so the next attempt (or
             # run) only has to redo the rename, not the download.
             try:
-                _rename_with_retry(part, dest, overwrite=True)
+                rename_with_retry(part, dest, overwrite=True)
             except PermissionError as e:
                 _LOGGER.debug("Could not move %s into place: %s", part, e)
                 last_error = e
